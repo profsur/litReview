@@ -3,9 +3,55 @@ import pandas as pd
 import json
 from database import SessionLocal, Paper
 from ingestion import process_uploaded_pdf
+from fpdf import FPDF
+
+def generate_pdf(doc_title, doc_summary, ai_results):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_auto_page_break(auto=True, margin=15)
+    
+    # Title Section
+    pdf.set_font("Arial", 'B', 16)
+    pdf.multi_cell(0, 10, f"Literature Review: {doc_title}")
+    
+    # Description/Summary Section
+    pdf.set_font("Arial", 'I', 12)
+    pdf.multi_cell(0, 10, f"Document Context: {doc_summary}")
+    pdf.ln(5) # Add a line break
+    
+    # AI Extraction Results
+    pdf.set_font("Arial", '', 12)
+    # Note: fpdf sometimes struggles with complex Unicode (like emojis). 
+    # Encoding to latin-1 with 'replace' prevents crashes on special characters.
+    clean_text = ai_results.encode('latin-1', 'replace').decode('latin-1')
+    pdf.multi_cell(0, 8, clean_text)
+    
+    st.download_button(
+    label="📄 Download as PDF",
+    data=pdf_bytes,
+    file_name=f"{paper_title}_extraction.pdf",
+    mime="application/pdf"
+)
+    # Combine the context and results into one clean block
+    combined_output = f"""
+    DOCUMENT: {paper_title}
+    CONTEXT: {paper_description}
+    ---
+    EXTRACTION RESULTS:
+    {response.text}
+    """
+
+    # This creates a visually clean code block that has a native "Copy" icon in the top right corner.
+    # Users can click it once to share via email, paste into a Word doc, or print.
+    st.markdown("### Copy & Share")
+    st.code(combined_output, language="markdown") 
+    
+    # Output as a byte string for Streamlit's download button
+    return pdf.output(dest="S").encode("latin-1")
 
 st.set_page_config(layout="wide")
 st.title("📚 Academic Literature Review Repository")
+
 
 # --- DATABASE CONNECTION ---
 @st.cache_resource
