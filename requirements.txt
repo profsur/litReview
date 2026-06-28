@@ -4,3 +4,4 @@ sqlalchemy
 PyPDF2
 google-genai
 python-dotenv
+fpdf
