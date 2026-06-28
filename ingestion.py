@@ -1,10 +1,14 @@
 import os
+from dotenv import load_dotenv
 import json
 import PyPDF2
 from google import genai  # <-- Updated Library
 from google.genai import types # <-- Add this import at the top of your file
 from database import SessionLocal, Paper
 from prompts import EXTRACTION_PROMPT
+
+# --- Load the hidden .env file ---
+load_dotenv()
 
 # Pulls the key secretly from your environment variables
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))

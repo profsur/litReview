@@ -13,6 +13,3 @@ __pycache__/
 data/
 *.pdf
 
-.env
-.env.txt
-*.txt

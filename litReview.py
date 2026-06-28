@@ -5,7 +5,9 @@ from database import SessionLocal, Paper
 from ingestion import process_uploaded_pdf
 from fpdf import FPDF
 
+# --- HELPER FUNCTIONS ---
 def generate_pdf(doc_title, doc_summary, ai_results):
+    """Generates a PDF byte string from the extracted text."""
     pdf = FPDF()
     pdf.add_page()
     pdf.set_auto_page_break(auto=True, margin=15)
@@ -16,42 +18,19 @@ def generate_pdf(doc_title, doc_summary, ai_results):
     
     # Description/Summary Section
     pdf.set_font("Arial", 'I', 12)
-    pdf.multi_cell(0, 10, f"Document Context: {doc_summary}")
-    pdf.ln(5) # Add a line break
+    pdf.multi_cell(0, 10, f"Context: {doc_summary}")
+    pdf.ln(5)
     
     # AI Extraction Results
     pdf.set_font("Arial", '', 12)
-    # Note: fpdf sometimes struggles with complex Unicode (like emojis). 
-    # Encoding to latin-1 with 'replace' prevents crashes on special characters.
-    clean_text = ai_results.encode('latin-1', 'replace').decode('latin-1')
+    clean_text = str(ai_results).encode('latin-1', 'replace').decode('latin-1')
     pdf.multi_cell(0, 8, clean_text)
     
-    st.download_button(
-    label="📄 Download as PDF",
-    data=pdf_bytes,
-    file_name=f"{paper_title}_extraction.pdf",
-    mime="application/pdf"
-)
-    # Combine the context and results into one clean block
-    combined_output = f"""
-    DOCUMENT: {paper_title}
-    CONTEXT: {paper_description}
-    ---
-    EXTRACTION RESULTS:
-    {response.text}
-    """
-
-    # This creates a visually clean code block that has a native "Copy" icon in the top right corner.
-    # Users can click it once to share via email, paste into a Word doc, or print.
-    st.markdown("### Copy & Share")
-    st.code(combined_output, language="markdown") 
-    
-    # Output as a byte string for Streamlit's download button
     return pdf.output(dest="S").encode("latin-1")
 
+# --- PAGE CONFIG ---
 st.set_page_config(layout="wide")
 st.title("📚 Academic Literature Review Repository")
-
 
 # --- DATABASE CONNECTION ---
 @st.cache_resource
@@ -63,9 +42,7 @@ db = get_db_session()
 # --- DATA LOADING ---
 def load_data_from_db():
     papers = db.query(Paper).all()
-    
     if not papers:
-        # Returns an empty DataFrame with the correct structure to prevent crashes
         return pd.DataFrame(columns=[
             "id", "Title", "Authors", "Year", "Domain", 
             "Sample", "Technique", "Findings", "Variables", 
@@ -101,9 +78,17 @@ if uploaded_file is not None:
             success, message = process_uploaded_pdf(uploaded_file)
             if success:
                 st.sidebar.success(message)
-                st.rerun()  # Forces the page to refresh and show the new data immediately
+                st.rerun()
             else:
                 st.sidebar.error(message)
+
+# --- GOOGLE FORM FEEDBACK ---
+st.sidebar.markdown("---")
+st.sidebar.subheader("📝 Help Us Improve")
+st.sidebar.write("If you found this tool useful, please share your experience!")
+# Replace the link below when your form is ready
+st.sidebar.link_button("Submit Feedback", "https://docs.google.com/forms/your-link-here")
+
 
 # --- GLOBAL FILTERS SIDEBAR ---
 st.sidebar.header("🔍 Global Filters")
@@ -111,7 +96,6 @@ if df is not None and not df.empty:
     search_query = st.sidebar.text_input("Search keywords or frameworks:")
     domain_filter = st.sidebar.multiselect("Filter by Domain:", options=df["Domain"].unique(), default=df["Domain"].unique())
 
-    # Apply filters
     filtered_df = df[df["Domain"].isin(domain_filter)]
     if search_query:
         filtered_df = filtered_df[
@@ -122,7 +106,7 @@ else:
     st.sidebar.info("Database is empty. Upload papers to activate filters.")
     filtered_df = pd.DataFrame()
 
-# --- MAIN LAYOUT (40/60 Split) ---
+# --- MAIN LAYOUT ---
 col_table, col_details = st.columns([2, 3])
 
 with col_table:
@@ -174,6 +158,30 @@ with col_details:
                     st.markdown(f"**{clean_key}:** {val}")
         except json.JSONDecodeError:
             st.warning(article["Limitations"])
+
+        st.markdown("---")
+        
+        # --- PDF GENERATION & SHARING ---
+        st.subheader("📤 Export & Share")
+        
+        # Compiles the database row into a clean text block for the PDF
+        compiled_insights = f"Methodology: {article['Technique']}\n\nFindings: {article['Findings']}\n\nLimitations: {article['Limitations']}"
+        doc_summary = f"Authors: {article['Authors']} ({article['Year']})"
+        
+        # Generate the PDF in the background
+        pdf_bytes = generate_pdf(article['Title'], doc_summary, compiled_insights)
+        
+        # Display the Download Button
+        st.download_button(
+            label="📄 Download Insight as PDF",
+            data=pdf_bytes,
+            file_name=f"extraction_{article['Year']}.pdf",
+            mime="application/pdf"
+        )
+        
+        # Display the Copy block
+        combined_output = f"DOCUMENT: {article['Title']}\nCONTEXT: {doc_summary}\n---\nEXTRACTION RESULTS:\n{compiled_insights}"
+        st.code(combined_output, language="markdown") 
 
         st.markdown("---")
         st.markdown("#### ✍️ Custom Synthesis Notes")
